@@ -1,58 +1,36 @@
-import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
 import 'package:smart_tutor/services/auth_service.dart';
-import 'package:smart_tutor/screens/common/role_router_screen.dart';
 
-class TutorProfileScreen extends StatefulWidget {
-  const TutorProfileScreen({super.key});
+class EditTutorProfileScreen extends StatefulWidget {
+  final String education;
+  final String subject;
+  final String experience;
+
+  const EditTutorProfileScreen({
+    super.key,
+    required this.education,
+    required this.subject,
+    required this.experience,
+  });
 
   @override
-  State<TutorProfileScreen> createState() => _TutorProfileScreenState();
+  State<EditTutorProfileScreen> createState() => _EditTutorProfileScreenState();
 }
 
-class _TutorProfileScreenState extends State<TutorProfileScreen> {
-  final TextEditingController _educationController = TextEditingController();
-  final TextEditingController _subjectController = TextEditingController();
-  final TextEditingController _experienceController = TextEditingController();
+class _EditTutorProfileScreenState extends State<EditTutorProfileScreen> {
+  late TextEditingController _educationController;
+  late TextEditingController _subjectController;
+  late TextEditingController _experienceController;
 
   bool _isLoading = false;
 
-  Future<void> _saveProfile() async {
-    final user = AuthService.currentUser;
-    if (user == null) return;
-
-    if (_educationController.text.trim().isEmpty ||
-        _subjectController.text.trim().isEmpty ||
-        _experienceController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('সব field পূরণ করো')),
-      );
-      return;
-    }
-
-    setState(() => _isLoading = true);
-
-    await FirebaseFirestore.instance
-        .collection('tutor_profiles')
-        .doc(user.uid)
-        .set({
-      'uid': user.uid,
-      'education': _educationController.text.trim(),
-      'subject': _subjectController.text.trim(),
-      'experience': _experienceController.text.trim(),
-    });
-
-    await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
-      'profileCompleted': true,
-    });
-
-    if (!mounted) return;
-
-    // ✅ BACK BUTTON FIXED
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const RoleRouterScreen()),
-    );
+  @override
+  void initState() {
+    super.initState();
+    _educationController = TextEditingController(text: widget.education);
+    _subjectController = TextEditingController(text: widget.subject);
+    _experienceController = TextEditingController(text: widget.experience);
   }
 
   @override
@@ -65,7 +43,6 @@ class _TutorProfileScreenState extends State<TutorProfileScreen> {
 
   Widget buildInputField({
     required String label,
-    required String hint,
     required IconData icon,
     required TextEditingController controller,
   }) {
@@ -87,11 +64,43 @@ class _TutorProfileScreenState extends State<TutorProfileScreen> {
         decoration: InputDecoration(
           icon: Icon(icon, color: const Color(0xFF4F46E5)),
           labelText: label,
-          hintText: hint,
           border: InputBorder.none,
         ),
       ),
     );
+  }
+
+  Future<void> _updateProfile() async {
+    final user = AuthService.currentUser;
+    if (user == null) return;
+
+    if (_educationController.text.trim().isEmpty ||
+        _subjectController.text.trim().isEmpty ||
+        _experienceController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('সব field পূরণ করো')),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    await FirebaseFirestore.instance
+        .collection('tutor_profiles')
+        .doc(user.uid)
+        .update({
+      'education': _educationController.text.trim(),
+      'subject': _subjectController.text.trim(),
+      'experience': _experienceController.text.trim(),
+    });
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Profile updated successfully')),
+    );
+
+    Navigator.pop(context);
   }
 
   @override
@@ -99,7 +108,7 @@ class _TutorProfileScreenState extends State<TutorProfileScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FB),
       appBar: AppBar(
-        title: const Text('Tutor Profile'),
+        title: const Text('Edit Tutor Profile'),
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         elevation: 0,
@@ -110,42 +119,39 @@ class _TutorProfileScreenState extends State<TutorProfileScreen> {
           children: [
             buildInputField(
               label: 'Education',
-              hint: 'B.Sc / HSC',
               icon: Icons.school,
               controller: _educationController,
             ),
             buildInputField(
               label: 'Subject',
-              hint: 'Math / Science',
               icon: Icons.book,
               controller: _subjectController,
             ),
             buildInputField(
               label: 'Experience',
-              hint: '1-2 years',
               icon: Icons.work,
               controller: _experienceController,
             ),
             const SizedBox(height: 20),
             SizedBox(
               width: double.infinity,
-              height: 50,
+              height: 52,
               child: ElevatedButton(
-                onPressed: _isLoading ? null : _saveProfile,
+                onPressed: _isLoading ? null : _updateProfile,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF4F46E5),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(16),
                   ),
                 ),
                 child: _isLoading
                     ? const CircularProgressIndicator(color: Colors.white)
                     : const Text(
-                        'Save Profile',
+                        'Update Profile',
                         style: TextStyle(color: Colors.white),
                       ),
               ),
-            )
+            ),
           ],
         ),
       ),
