@@ -61,6 +61,24 @@ class MyGuardianProfileScreen extends StatelessWidget {
     );
   }
 
+  String _stringValue(dynamic value, String fallback) {
+    if (value == null) return fallback;
+    final text = value.toString().trim();
+    if (text.isEmpty) return fallback;
+    return text;
+  }
+
+  String _listValue(dynamic value, String fallback) {
+    if (value == null) return fallback;
+    if (value is List) {
+      if (value.isEmpty) return fallback;
+      return value.map((e) => e.toString()).join(', ');
+    }
+    final text = value.toString().trim();
+    if (text.isEmpty) return fallback;
+    return text;
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = AuthService.currentUser;
@@ -91,11 +109,46 @@ class MyGuardianProfileScreen extends StatelessWidget {
 
                 final data = snapshot.data!.data() as Map<String, dynamic>;
 
-                final name = data['name'] ?? 'No name added';
-                final phone = data['phone'] ?? 'No phone added';
-                final student = data['student'] ?? 'No student added';
+                final fullName =
+                    _stringValue(data['fullName'], 'No name added');
+                final phone =
+                    _stringValue(data['phone'], 'No phone added');
+                final childName =
+                    _stringValue(data['childName'], 'No student added');
+                final email =
+                    _stringValue(data['email'], 'No email added');
+                final address =
+                    _stringValue(data['address'], 'No address added');
+                final area =
+                    _stringValue(data['area'], 'No area added');
+                final city =
+                    _stringValue(data['city'], 'No city added');
+                final childClass =
+                    _stringValue(data['childClass'], 'No class added');
+                final preferredSubjects = _listValue(
+                  data['preferredSubjects'],
+                  'No subjects added',
+                );
+                final preferredTutorGender = _stringValue(
+                  data['preferredTutorGender'],
+                  'No preference added',
+                );
+                final preferredTutorType = _stringValue(
+                  data['preferredTutorType'],
+                  'No tutor type added',
+                );
+                final budgetRange = _stringValue(
+                  data['budgetRange'],
+                  'No budget added',
+                );
+                final preferredSchedule = _stringValue(
+                  data['preferredSchedule'],
+                  'No schedule added',
+                );
+                final notes =
+                    _stringValue(data['notes'], 'No notes added');
 
-                return Padding(
+                return SingleChildScrollView(
                   padding: const EdgeInsets.all(16),
                   child: Column(
                     children: [
@@ -139,38 +192,38 @@ class MyGuardianProfileScreen extends StatelessWidget {
                           ],
                         ),
                       ),
-                      const SizedBox(height: 22),
-                      infoTile(
-                        icon: Icons.person_outline,
-                        title: 'Guardian Name',
-                        value: name,
-                      ),
-                      infoTile(
-                        icon: Icons.phone_outlined,
-                        title: 'Phone Number',
-                        value: phone,
-                      ),
-                      infoTile(
-                        icon: Icons.school_outlined,
-                        title: 'Student Name',
-                        value: student,
-                      ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 16),
+
                       SizedBox(
                         width: double.infinity,
                         height: 52,
                         child: ElevatedButton.icon(
-                          onPressed: () {
-                            Navigator.push(
+                          onPressed: () async {
+                            final result = await Navigator.push(
                               context,
                               MaterialPageRoute(
                                 builder: (_) => EditGuardianProfileScreen(
-                                  name: name,
+                                  fullName: fullName,
                                   phone: phone,
-                                  student: student,
+                                  email: email,
+                                  address: address,
+                                  area: area,
+                                  city: city,
+                                  childName: childName,
+                                  childClass: childClass,
+                                  preferredSubjects: preferredSubjects,
+                                  preferredTutorGender: preferredTutorGender,
+                                  preferredTutorType: preferredTutorType,
+                                  budgetRange: budgetRange,
+                                  preferredSchedule: preferredSchedule,
+                                  notes: notes,
                                 ),
                               ),
                             );
+
+                            if (result == true && context.mounted) {
+                              (context as Element).markNeedsBuild();
+                            }
                           },
                           icon: const Icon(Icons.edit, color: Colors.white),
                           label: const Text(
@@ -184,6 +237,78 @@ class MyGuardianProfileScreen extends StatelessWidget {
                             ),
                           ),
                         ),
+                      ),
+
+                      const SizedBox(height: 22),
+                      infoTile(
+                        icon: Icons.person_outline,
+                        title: 'Guardian Name',
+                        value: fullName,
+                      ),
+                      infoTile(
+                        icon: Icons.phone_outlined,
+                        title: 'Phone Number',
+                        value: phone,
+                      ),
+                      infoTile(
+                        icon: Icons.email_outlined,
+                        title: 'Email',
+                        value: email,
+                      ),
+                      infoTile(
+                        icon: Icons.home_outlined,
+                        title: 'Address',
+                        value: address,
+                      ),
+                      infoTile(
+                        icon: Icons.location_on_outlined,
+                        title: 'Area',
+                        value: area,
+                      ),
+                      infoTile(
+                        icon: Icons.location_city_outlined,
+                        title: 'City',
+                        value: city,
+                      ),
+                      infoTile(
+                        icon: Icons.school_outlined,
+                        title: 'Student Name',
+                        value: childName,
+                      ),
+                      infoTile(
+                        icon: Icons.class_outlined,
+                        title: 'Student Class',
+                        value: childClass,
+                      ),
+                      infoTile(
+                        icon: Icons.menu_book_outlined,
+                        title: 'Preferred Subjects',
+                        value: preferredSubjects,
+                      ),
+                      infoTile(
+                        icon: Icons.person_pin_outlined,
+                        title: 'Preferred Tutor Gender',
+                        value: preferredTutorGender,
+                      ),
+                      infoTile(
+                        icon: Icons.badge_outlined,
+                        title: 'Preferred Tutor Type',
+                        value: preferredTutorType,
+                      ),
+                      infoTile(
+                        icon: Icons.attach_money_outlined,
+                        title: 'Budget Range',
+                        value: budgetRange,
+                      ),
+                      infoTile(
+                        icon: Icons.schedule_outlined,
+                        title: 'Preferred Schedule',
+                        value: preferredSchedule,
+                      ),
+                      infoTile(
+                        icon: Icons.note_alt_outlined,
+                        title: 'Notes',
+                        value: notes,
                       ),
                     ],
                   ),

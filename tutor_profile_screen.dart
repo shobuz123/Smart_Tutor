@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:smart_tutor/services/auth_service.dart';
-import 'package:smart_tutor/screens/common/role_router_screen.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../../models/tutor_profile_model.dart';
+import '../../services/tutor_profile_service.dart';
+import '../../services/file_upload_service.dart';
+import 'tutor_dashboard_screen.dart';
 
 class TutorProfileScreen extends StatefulWidget {
   const TutorProfileScreen({super.key});
@@ -11,142 +13,199 @@ class TutorProfileScreen extends StatefulWidget {
 }
 
 class _TutorProfileScreenState extends State<TutorProfileScreen> {
-  final TextEditingController _educationController = TextEditingController();
-  final TextEditingController _subjectController = TextEditingController();
-  final TextEditingController _experienceController = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+  final _service = TutorProfileService();
+  final _uploadService = FileUploadService();
+
+  final _fullNameController = TextEditingController();
+  final _phoneController = TextEditingController();
+  final _emailController = TextEditingController();
+
+  String _uploadedProfileImageUrl = '';
+  String _uploadedDocumentUrl = '';
 
   bool _isLoading = false;
 
   Future<void> _saveProfile() async {
-    final user = AuthService.currentUser;
+    final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    if (_educationController.text.trim().isEmpty ||
-        _subjectController.text.trim().isEmpty ||
-        _experienceController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('সব field পূরণ করো')),
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final profile = TutorProfileModel(
+        uid: user.uid,
+        fullName: _fullNameController.text.trim(),
+        phone: _phoneController.text.trim(),
+        email: _emailController.text.trim(),
+        profileImage: _uploadedProfileImageUrl,
+        gender: 'Male',
+        currentLocation: '',
+        permanentLocation: '',
+        qualification: '',
+        universityOrCollege: '',
+        department: '',
+        yearOrSemester: '',
+        cgpaOrResult: '',
+        subjects: [],
+        preferredClasses: [],
+        teachingExperience: '',
+        teachingStyle: '',
+        expectedSalary: '',
+        availableDays: [],
+        preferredArea: '',
+        medium: '',
+        tutoringMode: 'Offline',
+        bio: '',
+        achievements: '',
+        documentUrl: _uploadedDocumentUrl,
+        verificationStatus: 'not_submitted',
+        guardianRatingAverage: 0.0,
+        guardianTotalReviews: 0,
+        adminRating: 0.0,
+        adminStatus: 'pending',
+        updatedAt: DateTime.now(),
       );
-      return;
+
+      await _service.saveTutorProfile(profile);
+
+      if (!mounted) return;
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const TutorDashboardScreen(),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
+      );
     }
 
-    setState(() => _isLoading = true);
-
-    await FirebaseFirestore.instance
-        .collection('tutor_profiles')
-        .doc(user.uid)
-        .set({
-      'uid': user.uid,
-      'education': _educationController.text.trim(),
-      'subject': _subjectController.text.trim(),
-      'experience': _experienceController.text.trim(),
-    });
-
-    await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
-      'profileCompleted': true,
-    });
-
-    if (!mounted) return;
-
-    // ✅ BACK BUTTON FIXED
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const RoleRouterScreen()),
-    );
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+      });
+    }
   }
 
-  @override
-  void dispose() {
-    _educationController.dispose();
-    _subjectController.dispose();
-    _experienceController.dispose();
-    super.dispose();
-  }
-
-  Widget buildInputField({
-    required String label,
-    required String hint,
-    required IconData icon,
-    required TextEditingController controller,
-  }) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: const [
-          BoxShadow(
-            color: Colors.black12,
-            blurRadius: 8,
-          ),
-        ],
-      ),
-      child: TextField(
+  Widget input(String label, TextEditingController controller) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: TextFormField(
         controller: controller,
+        validator: (value) {
+          if (value == null || value.trim().isEmpty) {
+            return '$label required';
+          }
+          return null;
+        },
         decoration: InputDecoration(
-          icon: Icon(icon, color: const Color(0xFF4F46E5)),
           labelText: label,
-          hintText: hint,
-          border: InputBorder.none,
+          border: const OutlineInputBorder(),
         ),
       ),
     );
   }
 
   @override
+  void dispose() {
+    _fullNameController.dispose();
+    _phoneController.dispose();
+    _emailController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    _emailController.text =
+        FirebaseAuth.instance.currentUser?.email ?? '';
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FB),
       appBar: AppBar(
         title: const Text('Tutor Profile'),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        elevation: 0,
       ),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            buildInputField(
-              label: 'Education',
-              hint: 'B.Sc / HSC',
-              icon: Icons.school,
-              controller: _educationController,
-            ),
-            buildInputField(
-              label: 'Subject',
-              hint: 'Math / Science',
-              icon: Icons.book,
-              controller: _subjectController,
-            ),
-            buildInputField(
-              label: 'Experience',
-              hint: '1-2 years',
-              icon: Icons.work,
-              controller: _experienceController,
-            ),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton(
-                onPressed: _isLoading ? null : _saveProfile,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF4F46E5),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            children: [
+              input('Full Name', _fullNameController),
+              input('Phone', _phoneController),
+              input('Email', _emailController),
+
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  onPressed: () async {
+                    final url =
+                        await _uploadService.pickAndUploadFile(
+                      folderName: 'tutor_profile_images',
+                      allowedExtensions: [
+                        'jpg',
+                        'jpeg',
+                        'png'
+                      ],
+                    );
+
+                    if (url != null) {
+                      setState(() {
+                        _uploadedProfileImageUrl = url;
+                      });
+                    }
+                  },
+                  child: const Text('Upload Profile Image'),
                 ),
-                child: _isLoading
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text(
-                        'Save Profile',
-                        style: TextStyle(color: Colors.white),
-                      ),
               ),
-            )
-          ],
+
+              const SizedBox(height: 12),
+
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  onPressed: () async {
+                    final url =
+                        await _uploadService.pickAndUploadFile(
+                      folderName: 'tutor_documents',
+                      allowedExtensions: [
+                        'jpg',
+                        'jpeg',
+                        'png',
+                        'pdf'
+                      ],
+                    );
+
+                    if (url != null) {
+                      setState(() {
+                        _uploadedDocumentUrl = url;
+                      });
+                    }
+                  },
+                  child: const Text('Upload Document'),
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              _isLoading
+                  ? const CircularProgressIndicator()
+                  : SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: _saveProfile,
+                        child: const Text('Save Profile'),
+                      ),
+                    ),
+            ],
+          ),
         ),
       ),
     );

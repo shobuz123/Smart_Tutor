@@ -1,9 +1,8 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:smart_tutor/screens/common/role_router_screen.dart';
-import 'package:smart_tutor/services/auth_service.dart';
-import 'package:smart_tutor/theme/app_theme.dart';
-import 'package:smart_tutor/widgets/app_input_field.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../../models/guardian_profile_model.dart';
+import '../../services/guardian_profile_service.dart';
+import 'my_guardian_profile_screen.dart';
 
 class GuardianProfileScreen extends StatefulWidget {
   const GuardianProfileScreen({super.key});
@@ -13,281 +12,276 @@ class GuardianProfileScreen extends StatefulWidget {
 }
 
 class _GuardianProfileScreenState extends State<GuardianProfileScreen> {
-  final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _phoneController = TextEditingController();
-  final TextEditingController _studentController = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+  final _service = GuardianProfileService();
 
+  final _fullNameController = TextEditingController();
+  final _phoneController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _addressController = TextEditingController();
+  final _areaController = TextEditingController();
+  final _cityController = TextEditingController();
+  final _childNameController = TextEditingController();
+  final _childClassController = TextEditingController();
+  final _preferredSubjectsController = TextEditingController();
+  final _budgetRangeController = TextEditingController();
+  final _preferredScheduleController = TextEditingController();
+  final _notesController = TextEditingController();
+
+  String _preferredTutorGender = 'Any';
+  String _preferredTutorType = 'Any';
   bool _isLoading = false;
 
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+  }
+
+  Future<void> _loadProfile() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      _emailController.text = user?.email ?? '';
+
+      final profile = await _service.getGuardianProfile();
+
+      if (profile == null) return;
+
+      _fullNameController.text = profile.fullName;
+      _phoneController.text = profile.phone;
+      _emailController.text = profile.email;
+      _addressController.text = profile.address;
+      _areaController.text = profile.area;
+      _cityController.text = profile.city;
+      _childNameController.text = profile.childName;
+      _childClassController.text = profile.childClass;
+      _preferredSubjectsController.text = profile.preferredSubjects.join(', ');
+      _budgetRangeController.text = profile.budgetRange;
+      _preferredScheduleController.text = profile.preferredSchedule;
+      _notesController.text = profile.notes;
+
+      _preferredTutorGender = profile.preferredTutorGender.isNotEmpty
+          ? profile.preferredTutorGender
+          : 'Any';
+
+      _preferredTutorType = profile.preferredTutorType.isNotEmpty
+          ? profile.preferredTutorType
+          : 'Any';
+
+      if (mounted) {
+        setState(() {});
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load profile: $e')),
+      );
+    }
+  }
+
   Future<void> _saveProfile() async {
-    final user = AuthService.currentUser;
+    if (!_formKey.currentState!.validate()) return;
+
+    final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    if (_nameController.text.trim().isEmpty ||
-        _phoneController.text.trim().isEmpty ||
-        _studentController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('সব field পূরণ করো')),
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final profile = GuardianProfileModel(
+        uid: user.uid,
+        fullName: _fullNameController.text.trim(),
+        phone: _phoneController.text.trim(),
+        email: _emailController.text.trim(),
+        address: _addressController.text.trim(),
+        area: _areaController.text.trim(),
+        city: _cityController.text.trim(),
+        childName: _childNameController.text.trim(),
+        childClass: _childClassController.text.trim(),
+        preferredSubjects: _preferredSubjectsController.text
+            .split(',')
+            .map((e) => e.trim())
+            .where((e) => e.isNotEmpty)
+            .toList(),
+        preferredTutorGender: _preferredTutorGender,
+        preferredTutorType: _preferredTutorType,
+        budgetRange: _budgetRangeController.text.trim(),
+        preferredSchedule: _preferredScheduleController.text.trim(),
+        notes: _notesController.text.trim(),
+        adminStatus: 'pending',
+        updatedAt: DateTime.now(),
       );
-      return;
+
+      await _service.saveGuardianProfile(profile);
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Guardian profile saved successfully')),
+      );
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const MyGuardianProfileScreen(),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
+  }
 
-    setState(() => _isLoading = true);
-
-    await FirebaseFirestore.instance
-        .collection('guardian_profiles')
-        .doc(user.uid)
-        .set({
-      'uid': user.uid,
-      'name': _nameController.text.trim(),
-      'phone': _phoneController.text.trim(),
-      'student': _studentController.text.trim(),
-    });
-
-    await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
-      'profileCompleted': true,
-    });
-
-    if (!mounted) return;
-
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const RoleRouterScreen()),
+  Widget _buildTextField(
+    String label,
+    TextEditingController controller, {
+    int maxLines = 1,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: TextFormField(
+        controller: controller,
+        maxLines: maxLines,
+        validator: (value) {
+          if (value == null || value.trim().isEmpty) {
+            return '$label is required';
+          }
+          return null;
+        },
+        decoration: InputDecoration(
+          labelText: label,
+          border: const OutlineInputBorder(),
+        ),
+      ),
     );
   }
 
-  Widget buildMiniInfo({
-    required IconData icon,
-    required String title,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(.15),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white24),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: Colors.white, size: 18),
-          const SizedBox(width: 8),
-          Text(
-            title,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
+  Widget _buildSectionTitle(String title) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Text(
+        title,
+        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
       ),
     );
   }
 
   @override
   void dispose() {
-    _nameController.dispose();
+    _fullNameController.dispose();
     _phoneController.dispose();
-    _studentController.dispose();
+    _emailController.dispose();
+    _addressController.dispose();
+    _areaController.dispose();
+    _cityController.dispose();
+    _childNameController.dispose();
+    _childClassController.dispose();
+    _preferredSubjectsController.dispose();
+    _budgetRangeController.dispose();
+    _preferredScheduleController.dispose();
+    _notesController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.background,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(18, 12, 18, 24),
+      appBar: AppBar(
+        title: const Text('Guardian Profile'),
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Form(
+          key: _formKey,
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: IconButton(
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.arrow_back_ios_new_rounded),
-                    ),
-                  ),
-                  const Spacer(),
-                  const Text(
-                    'Guardian Profile',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      color: AppTheme.textDark,
-                    ),
-                  ),
-                  const Spacer(),
-                  const SizedBox(width: 48),
+              _buildSectionTitle('Basic Info'),
+              _buildTextField('Full Name', _fullNameController),
+              _buildTextField('Phone', _phoneController),
+              _buildTextField('Email', _emailController),
+              _buildTextField('Address', _addressController),
+              _buildTextField('Area', _areaController),
+              _buildTextField('City', _cityController),
+
+              _buildSectionTitle('Student Info'),
+              _buildTextField('Child Name', _childNameController),
+              _buildTextField('Child Class', _childClassController),
+
+              _buildSectionTitle('Tutor Preference'),
+              _buildTextField(
+                'Preferred Subjects (comma separated)',
+                _preferredSubjectsController,
+              ),
+              DropdownButtonFormField<String>(
+                value: _preferredTutorGender,
+                decoration: const InputDecoration(
+                  labelText: 'Preferred Tutor Gender',
+                  border: OutlineInputBorder(),
+                ),
+                items: const [
+                  DropdownMenuItem(value: 'Any', child: Text('Any')),
+                  DropdownMenuItem(value: 'Male', child: Text('Male')),
+                  DropdownMenuItem(value: 'Female', child: Text('Female')),
                 ],
+                onChanged: (value) {
+                  setState(() {
+                    _preferredTutorGender = value!;
+                  });
+                },
               ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                value: _preferredTutorType,
+                decoration: const InputDecoration(
+                  labelText: 'Preferred Tutor Type',
+                  border: OutlineInputBorder(),
+                ),
+                items: const [
+                  DropdownMenuItem(value: 'Any', child: Text('Any')),
+                  DropdownMenuItem(
+                    value: 'University Student',
+                    child: Text('University Student'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'Professional Teacher',
+                    child: Text('Professional Teacher'),
+                  ),
+                ],
+                onChanged: (value) {
+                  setState(() {
+                    _preferredTutorType = value!;
+                  });
+                },
+              ),
+
+              const SizedBox(height: 16),
+              _buildSectionTitle('Budget & Schedule'),
+              _buildTextField('Budget Range', _budgetRangeController),
+              _buildTextField('Preferred Schedule', _preferredScheduleController),
+
+              _buildSectionTitle('Notes'),
+              _buildTextField('Notes', _notesController, maxLines: 3),
+
               const SizedBox(height: 20),
-
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(22),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(28),
-                  gradient: const LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      AppTheme.primary,
-                      Color(0xFF7C3AED),
-                      Color(0xFF2563EB),
-                    ],
-                  ),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Color(0x334F46E5),
-                      blurRadius: 25,
-                      offset: Offset(0, 12),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white24, width: 2),
-                      ),
-                      child: const CircleAvatar(
-                        radius: 36,
-                        backgroundColor: Colors.white,
-                        child: Icon(
-                          Icons.family_restroom_rounded,
-                          size: 34,
-                          color: AppTheme.primary,
-                        ),
+              _isLoading
+                  ? const CircularProgressIndicator()
+                  : SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: _saveProfile,
+                        child: const Text('Save Profile'),
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'Complete Guardian Account',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Add guardian details to keep student information organized and trusted.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Color(0xFFE5E7EB),
-                        fontSize: 14,
-                        height: 1.5,
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        buildMiniInfo(
-                          icon: Icons.person_outline,
-                          title: 'Guardian',
-                        ),
-                        const SizedBox(width: 10),
-                        buildMiniInfo(
-                          icon: Icons.school_outlined,
-                          title: 'Student',
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 24),
-
-              const Text(
-                'Basic Information',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  color: AppTheme.textDark,
-                ),
-              ),
-              const SizedBox(height: 6),
-              const Text(
-                'Fill these details carefully for a complete guardian profile.',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: AppTheme.textLight,
-                ),
-              ),
-              const SizedBox(height: 18),
-
-              AppInputField(
-                label: 'Guardian Name',
-                hint: 'Example: Rahim Uddin',
-                icon: Icons.person_outline_rounded,
-                controller: _nameController,
-              ),
-              AppInputField(
-                label: 'Phone Number',
-                hint: 'Example: 017xxxxxxxx',
-                icon: Icons.phone_outlined,
-                controller: _phoneController,
-              ),
-              AppInputField(
-                label: 'Student Name',
-                hint: 'Example: Abdullah',
-                icon: Icons.school_outlined,
-                controller: _studentController,
-              ),
-
-              const SizedBox(height: 8),
-
-              SizedBox(
-                width: double.infinity,
-                height: 58,
-                child: ElevatedButton(
-                  onPressed: _isLoading ? null : _saveProfile,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.textDark,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                  ),
-                  child: _isLoading
-                      ? const SizedBox(
-                          height: 24,
-                          width: 24,
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2.6,
-                          ),
-                        )
-                      : const Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.check_circle_outline,
-                                color: Colors.white),
-                            SizedBox(width: 10),
-                            Text(
-                              'Save & Continue',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ],
-                        ),
-                ),
-              ),
             ],
           ),
         ),
